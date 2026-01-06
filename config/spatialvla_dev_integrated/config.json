@@ -1,0 +1,36 @@
+{
+  "model_type": "spatialvla",
+  "auto_map": {
+    "AutoConfig": "SpatialVLA_llava3d.model.configuration_spatialvla_dev.SpatialVLAConfig",
+    "AutoModel": "SpatialVLA_llava3d.model.modeling_spatialvla_dev.SpatialVLAForConditionalGeneration"
+  },
+  "language_model_name_or_path": "/cpfs01/qianfy_workspace/openvla_oft_rl/zzq_vla/model_zoo/llava3d_7B",
+  "vision_model_name_or_path": "/cpfs01/qianfy_workspace/openvla_oft_rl/zzq_vla/model_zoo/siglip-so400m-patch14-224",
+  "map_anything_model_name_or_path": "/cpfs01/qianfy_workspace/openvla_oft_rl/zzq_vla/SpatialVLA_llava3d/model_zoo/mapanything",
+  "image_token_index": 256000,
+  "ignore_index": -100,
+  "vision_config": {
+    "model_type": "siglip_vision_model",
+    "image_size": 224,
+    "patch_size": 14,
+    "hidden_size": 1152,
+    "projection_dim": 4096
+  },
+  "text_config": {
+    "model_type": "llama",
+    "hidden_size": 4096,
+    "vocab_size": 32000,
+    "num_image_tokens": 256
+  },
+  "action_expert_config": {
+    "model_type": "gemma",
+    "hidden_size": 2048,
+    "num_hidden_layers": 12,
+    "num_attention_heads": 8,
+    "num_key_value_heads": 1,
+    "intermediate_size": 8192,
+    "vocab_size": 256000
+  },
+  "action_dim": 14,
+  "action_horizon": 8
+}

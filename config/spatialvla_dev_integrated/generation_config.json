@@ -1,0 +1,8 @@
+{
+  "do_sample": false,
+  "max_length": 1024,
+  "max_new_tokens": 256,
+  "temperature": 1.0,
+  "top_p": 1.0,
+  "top_k": 50
+}

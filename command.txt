@@ -1,0 +1,6 @@
+PYTHONPATH=.:./MapAnything python test/test_huggingface_dev.py \
+  --language_model_path /2025233147/mapAnythingLlava3dPi0.5/model_parameters/llava3d_7B \
+  --vision_model_path /2025233147/mapAnythingLlava3dPi0.5/model_parameters/siglip-so400m-patch14-224 \
+  --map_anything_model_path /2025233147/mapAnythingLlava3dPi0.5/model_parameters/mapanything \
+  --image_path test/example.png \
+  --device 3
