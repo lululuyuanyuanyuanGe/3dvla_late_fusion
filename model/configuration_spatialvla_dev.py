@@ -26,7 +26,7 @@ logger = logging.get_logger(__name__)
 class SpatialVLAConfig(PretrainedConfig):
     model_type = "spatialvla"
     # 仅声明始终存在的子配置，避免在自动设置注意力实现时访问 None
-    sub_configs = {"text_config": AutoConfig, "vision_config": AutoConfig}
+    # sub_configs = {"text_config": AutoConfig, "vision_config": AutoConfig}
 
     def __init__(
         self,
@@ -53,10 +53,11 @@ class SpatialVLAConfig(PretrainedConfig):
         action_expert_config=None,
         **kwargs,
     ):
-        if language_model_name_or_path is None and text_config is None:
-            raise ValueError("Provide either `language_model_name_or_path` or a complete `text_config` for integrated checkpoints.")
-        if map_anything_model_name_or_path is None:
-            raise ValueError("Provide `map_anything_model_name_or_path` for MapAnything model.")
+        # print(f"[Debug Config] lm_path: {language_model_name_or_path}, text_config: {text_config}")
+        # if language_model_name_or_path is None and text_config is None:
+        #     raise ValueError("Provide either `language_model_name_or_path` or a complete `text_config` for integrated checkpoints.")
+        # if map_anything_model_name_or_path is None:
+        #     raise ValueError("Provide `map_anything_model_name_or_path` for MapAnything model.")
         
         self.vision_model_name_or_path = vision_model_name_or_path
         self.language_model_name_or_path = language_model_name_or_path
@@ -90,6 +91,7 @@ class SpatialVLAConfig(PretrainedConfig):
                 vision_use_head=False,
             )
         # 语言侧使用 LLaVA-3D 的配置（支持集成权重场景：直接用提供的 text_config）
+        # print(f"[Debug Config] Type of text_config: {type(text_config)}")
         if isinstance(text_config, dict):
             mt = text_config.get("model_type")
             if mt is None:
@@ -97,8 +99,13 @@ class SpatialVLAConfig(PretrainedConfig):
             self.text_config = CONFIG_MAPPING[mt](**text_config)
         elif isinstance(text_config, PretrainedConfig):
             self.text_config = text_config
-        else:
+        elif language_model_name_or_path is not None:
             self.text_config = AutoConfig.from_pretrained(language_model_name_or_path, trust_remote_code=True)
+        else:
+            # Default initialization (e.g. for diffing), set dummy or None
+            # If we set None, attribute exists but is None.
+            # But creating a dummy config prevents AttributeError downstream if accessed.
+            self.text_config = CONFIG_MAPPING["llama"]() # Default dummy config
         # 计算图像补丁数，统一从纯视觉 config 读取；若 image_size 为 (H,W)，取 H
         image_size = getattr(self.vision_config, "image_size", None)
         patch_size = getattr(self.vision_config, "patch_size", None)

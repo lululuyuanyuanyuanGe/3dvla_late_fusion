@@ -47,7 +47,12 @@ class FlowMatchingActionExpert(GemmaPreTrainedModel):
         self.action_horizon = action_horizon
         
         # 1. The Core Brain: Standard Gemma Model
-        self.model = GemmaModel(config)
+        base_model_path = getattr(config, "base_model_name_or_path", None)
+        if base_model_path:
+            print(f"Loading Action Expert Backbone from {base_model_path}...")
+            self.model = GemmaModel.from_pretrained(base_model_path)
+        else:
+            self.model = GemmaModel(config)
         
         # 2. Input Projections
         # A. Context Projector: Map VLM hidden dim (e.g. 4096) to Expert hidden dim (e.g. 2048)
@@ -153,6 +158,11 @@ class FlowMatchingActionExpert(GemmaPreTrainedModel):
         """
         Computes the Flow Matching MSE Loss.
         """
+        if torch.isnan(context_features).any():
+            print("[ERROR] NaNs in context_features!")
+        if torch.isnan(actions).any():
+            print("[ERROR] NaNs in actions!")
+            
         batch_size = actions.shape[0]
         device = actions.device
         

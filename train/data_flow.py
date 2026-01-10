@@ -7,37 +7,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import json
+
 class FlowMatchingParquetDataset(Dataset):
     """
     Dataset loader for LeRobot/HuggingFace style Parquet datasets.
-    This class handles the complexity of:
-    1. Loading large-scale robot data efficiently via Parquet/Arrow.
-    2. Creating "Action Chunks" on the fly (Sliding Window).
-    3. Normalizing continuous actions for Flow Matching training.
+    Supports on-the-fly action chunking and normalization.
     """
     def __init__(
         self,
         dataset_path,
         processor,
         norm_stats,
+        tasks_json_path=None,
         action_horizon=8,
         image_column="image",
-        instruction_column="instruction",
+        instruction_column="instruction", # Can be task_index if using lookup
         action_column="actions",
         episode_column="episode_index",
-        split="train"
+        split="train",
+        target_action_dim=19
     ):
         """
         Args:
-            dataset_path (str): Path to the parquet file or directory.
-            processor (SpatialVLAProcessor): VLA processor for tokenizing text and processing images.
-            norm_stats (dict): Normalization statistics (mean, std) for actions.
-            action_horizon (int): The number of future actions to predict (Chunk Size). Default 8.
-            image_column (str): Column name in parquet for images.
-            instruction_column (str): Column name in parquet for text instructions.
-            action_column (str): Column name in parquet for raw actions.
-            episode_column (str): Column name in parquet for episode index (to handle boundaries).
-            split (str): Dataset split to load (e.g., 'train').
+            target_action_dim (int): Target dimension to pad actions to (default 19).
         """
         self.processor = processor
         self.norm_stats = norm_stats
@@ -46,12 +39,31 @@ class FlowMatchingParquetDataset(Dataset):
         self.text_col = instruction_column
         self.action_col = action_column
         self.episode_col = episode_column
+        self.target_action_dim = target_action_dim
+        
+        # Load Task Map if provided
+        self.task_map = None
+        if tasks_json_path:
+            logger.info(f"Loading task map from {tasks_json_path}...")
+            self.task_map = {}
+            with open(tasks_json_path, 'r') as f:
+                for line in f:
+                    entry = json.loads(line)
+                    self.task_map[entry['task_index']] = entry['task']
         
         logger.info(f"Loading dataset from {dataset_path}...")
         # 'load_dataset' uses memory mapping (Apache Arrow), so it doesn't load 
         # the full dataset into RAM, allowing training on huge files.
         self.dataset = load_dataset("parquet", data_files=dataset_path, split=split)
         
+        if self.text_col not in self.dataset.column_names:
+             # If exact column missing, check if we can fall back to task_index
+             if "task_index" in self.dataset.column_names and self.task_map:
+                 logger.info(f"Column '{self.text_col}' not found, but 'task_index' + tasks.jsonl present. Switching mode.")
+                 self.text_col = "task_index"
+             else:
+                 logger.warning(f"Text column '{self.text_col}' not found. Will default to placeholder.")
+
         self.length = len(self.dataset)
 
     def __len__(self):
@@ -73,7 +85,14 @@ class FlowMatchingParquetDataset(Dataset):
         
         # 3. Load Text
         # The instruction (e.g., "Pick up the apple")
-        text = item[self.text_col]
+        if self.task_map and self.text_col == "task_index":
+            # Lookup instruction from task_index
+            t_idx = item[self.text_col]
+            text = self.task_map.get(t_idx, "unknown task")
+        elif self.text_col in item:
+            text = str(item[self.text_col])
+        else:
+            text = "do the task" 
         
         # 4. Load Action Chunk (T to T+Horizon) with Episode Boundary Handling
         # We calculate the safe end index. We cannot go beyond dataset length.
@@ -116,6 +135,14 @@ class FlowMatchingParquetDataset(Dataset):
         from train.utils_flow import normalize_action
         normalized_actions = normalize_action(raw_actions, self.norm_stats)
         
+        # Pad Action Dimension if necessary (e.g. 7 -> 19)
+        current_dim = normalized_actions.shape[-1]
+        if current_dim < self.target_action_dim:
+             padding_dim = self.target_action_dim - current_dim
+             # Pad with zeros along the last dimension
+             zeros = np.zeros((normalized_actions.shape[0], padding_dim), dtype=normalized_actions.dtype)
+             normalized_actions = np.concatenate([normalized_actions, zeros], axis=-1)
+        
         # 6. Process Inputs using the VLA Processor
         # CRITICAL: We pass `text` and `images` to create the VLM inputs (input_ids, pixel_values).
         # We DO NOT pass `suffix_actions` because we don't want discrete action tokens appended.
@@ -130,7 +157,7 @@ class FlowMatchingParquetDataset(Dataset):
         
         # The processor adds a batch dimension [1, seq_len] by default. 
         # We remove it because the DataLoader will add its own batch dimension later.
-        inputs = {k: v.squeeze(0) for k, v in inputs.items()}
+        inputs = {k: v.squeeze(0) if hasattr(v, "squeeze") else v for k, v in inputs.items()}
         
         # 7. Add Continuous Actions for Loss Calculation
         # We attach the normalized continuous actions to the input dictionary.
@@ -156,6 +183,13 @@ def flow_data_collator(features):
             # Stack text tensors. Since we used padding="max_length" in processor,
             # these are all same size.
             batch[k] = torch.stack([f[k] for f in features])
+        elif k in ["image_token_id", "image_token_index", "num_image_tokens"]:
+            # Metadata: typically scalar integers. Pass as tensor or single value?
+            # Model expects scalar or 1D tensor. Let's pass as Tensor [B] or just the value if constant.
+            # Safe bet: Stack them if they are in all items, to handle potential batching requirements
+            # But model handles `int` or `Tensor`. 
+            # Let's take the first one as they should be constant for the processor.
+            batch[k] = first[k]
             
     # Auto-regressive labels generation
     # Even if we care mainly about Action Loss, the Trainer expects 'labels' for logging.

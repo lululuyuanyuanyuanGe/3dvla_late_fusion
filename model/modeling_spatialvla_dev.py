@@ -315,7 +315,7 @@ class SpatialVLAForConditionalGeneration(SpatialVLAPreTrainedModel, GenerationMi
                 causal_mask[:, :, :, :mask_length] = causal_mask[:, :, :, :mask_length].masked_fill(token_type_ids[:, None, None, :].to(causal_mask.device) == 0, 0)
         return causal_mask
 
-    def get_image_features(self, pixel_values: torch.FloatTensor, intrinsic: torch.FloatTensor):
+    def get_image_features(self, pixel_values, intrinsic):
         siglip_pixel_values = TF.normalize(pixel_values, mean=SIGLIP_MEAN, std=SIGLIP_STD)
         siglip_pixel_values = siglip_pixel_values.float().contiguous()
         image_outputs = self.vision_tower(siglip_pixel_values)
@@ -478,6 +478,13 @@ class SpatialVLAForConditionalGeneration(SpatialVLAPreTrainedModel, GenerationMi
                 special_image_mask,
                 flat_image_features,
             )
+
+        # Fix for Gradient Checkpointing with Frozen Backbone
+        if self.training and getattr(self.language_model, "gradient_checkpointing", False):
+            inputs_embeds.requires_grad_(True)
+
+        if torch.isnan(inputs_embeds).any():
+            print("[ERROR] NaNs in inputs_embeds before LLaVA forward!")
 
         debug = bool(kwargs.get("debug", False))
         if debug:

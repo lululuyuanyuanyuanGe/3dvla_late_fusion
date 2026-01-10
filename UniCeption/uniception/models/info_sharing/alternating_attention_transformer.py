@@ -90,6 +90,13 @@ class MultiViewAlternatingAttentionTransformer(UniCeptionInfoSharingBase):
         # Initialize the base class
         super().__init__(name=name, size=size, *args, **kwargs)
 
+        if isinstance(mlp_layer, str):
+            if mlp_layer.lower() == "mlp":
+                mlp_layer = Mlp
+            else:
+                print(f"Warning: Unknown mlp_layer string '{mlp_layer}'. Defaulting to Mlp.")
+                mlp_layer = Mlp
+
         # Initialize the specific attributes of the transformer
         self.input_embed_dim = input_embed_dim
         self.distinguish_ref_and_non_ref_views = distinguish_ref_and_non_ref_views

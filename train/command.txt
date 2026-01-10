@@ -1,0 +1,1 @@
+python train/test_flow_pipeline.py --parquet_path /2025233147/zzq/cache/huggingface/lerobot/physical-intelligence/libero/data/chunk-000/episode_000000.parquet

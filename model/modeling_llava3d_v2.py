@@ -4,12 +4,13 @@ from typing import Optional, Tuple, Union, List
 from transformers import PreTrainedModel, AutoConfig
 from transformers.generation import GenerationMixin
 from transformers.modeling_outputs import CausalLMOutputWithPast
-from LLaVA_3D.llava.model.language_model.llava_llama import LlavaLlamaForCausalLM
+from LLaVA_3D.llava.model.language_model.llava_llama import LlavaLlamaForCausalLM, LlavaConfig
 from LLaVA_3D.llava.model.language_model.llava_mistral import LlavaMistralForCausalLM
 
 
 class LLaVA3DForCausalLMV2(PreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
+    config_class = LlavaConfig
 
     def __init__(self, config):
         super().__init__(config)

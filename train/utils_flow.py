@@ -13,10 +13,15 @@ def load_norm_stats(stats_path):
     with open(stats_path, 'r') as f:
         stats = json.load(f)
     
+    # Handle top-level "norm_stats" wrapper
+    if "norm_stats" in stats:
+        stats = stats["norm_stats"]
+
     # Handle different stats formats
     if "action" in stats:
-        # Standard LeRobot/OpenX format often looks like this
         return stats["action"]
+    if "actions" in stats: # Support Libero/LeRobot plural key
+        return stats["actions"]
     # Fallback for simple mean/std dict
     return stats
 
@@ -36,6 +41,13 @@ def normalize_action(action, stats):
         mean = np.array(stats['mean'], dtype=action.dtype)
         std = np.array(stats['std'], dtype=action.dtype)
         
+    # Handle dimension mismatch (e.g. Data=7dim, Stats=14dim)
+    # If stats are larger, slice them to match data.
+    if mean.shape[-1] > action.shape[-1]:
+        # logger.warning(f"Slicing norm stats from {mean.shape[-1]} to {action.shape[-1]}")
+        mean = mean[..., :action.shape[-1]]
+        std = std[..., :action.shape[-1]]
+        
     # eps to avoid division by zero
     std = std + 1e-8
     
@@ -52,6 +64,10 @@ def unnormalize_action(action, stats):
     else:
         mean = np.array(stats['mean'], dtype=action.dtype)
         std = np.array(stats['std'], dtype=action.dtype)
+        
+    if mean.shape[-1] > action.shape[-1]:
+        mean = mean[..., :action.shape[-1]]
+        std = std[..., :action.shape[-1]]
         
     return action * std + mean
 
